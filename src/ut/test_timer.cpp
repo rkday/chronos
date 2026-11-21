@@ -601,3 +601,17 @@ TEST_F(TestTimer, NextPopTimeMidReplicaAndSite)
 
   delete t;
 }
+
+TEST_F(TestTimerIDFormats, RejectNonPositiveReplicationFactors)
+{
+  for (int factor : {0, -1})
+  {
+    std::string error;
+    bool replicated = false, gr_replicated = false;
+    std::string json = "{\"timing\":{\"interval\":10},"
+      "\"callback\":{\"http\":{\"uri\":\"http://localhost/cb\",\"opaque\":\"x\"}},"
+      "\"reliability\":{\"replication-factor\":" + std::to_string(factor) + "}}";
+    EXPECT_EQ(nullptr, Timer::from_json(1, 0, 0, json, error, replicated, gr_replicated));
+    EXPECT_FALSE(error.empty());
+  }
+}

@@ -109,6 +109,15 @@ protected:
 typedef ::testing::Types<WithGR, WithoutGR> GRTypes;
 TYPED_TEST_CASE(TestHandler, GRTypes);
 
+TYPED_TEST(TestHandler, RejectZeroReplicationFactorInURL)
+{
+  TestFixture::controller_request("/timers/1234123412341234-0", htp_method_DELETE, "", "");
+  EXPECT_CALL(*TestFixture::_replicator, replicate(_)).Times(0);
+  EXPECT_CALL(*TestFixture::_th, add_timer(_, _)).Times(0);
+  EXPECT_CALL(*TestFixture::_httpstack, send_reply(_, 400, _));
+  TestFixture::_task->run();
+}
+
 // Tests a valid request to delete an existing timer
 TYPED_TEST(TestHandler, ValidJSONDeleteTimerWithoutReplicas)
 {
