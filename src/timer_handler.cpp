@@ -226,7 +226,8 @@ void TimerHandler::return_timer(Timer* timer)
   // We also need to check for timers with a zero interval and repeat_for value.
   // This would be for when a customer wants some information back from Chronos
   // immediately and only once, hence we should tombstone the timer after use.
-  if (((timer->sequence_number + 1) * timer->interval_ms > timer->repeat_for) ||
+  if (((static_cast<uint64_t>(timer->sequence_number) + 1) *
+         timer->interval_ms > timer->repeat_for) ||
       ((timer->interval_ms == 0) &&
        (timer->repeat_for == 0)))
   {
@@ -530,6 +531,18 @@ void TimerHandler::pop(Timer* timer)
     TRC_DEBUG("Discarding expired tombstone");
     delete timer;
     timer = NULL;
+    return;
+  }
+
+  // A timer whose first interval exceeds its repeat window must never fire.
+  // Also guard against expired replicated sequences before dispatching HTTP.
+  if ((static_cast<uint64_t>(timer->sequence_number) + 1) *
+        timer->interval_ms > timer->repeat_for)
+  {
+    TimerID id = timer->id;
+    timer->sequence_number++;
+    return_timer(timer);
+    handle_successful_callback(id);
     return;
   }
 

@@ -367,6 +367,43 @@ protected:
   TimerHandler* _th;
 };
 
+TEST_F(TestTimerHandlerAddAndReturn, SkipCallbackWhenIntervalExceedsRepeatWindow)
+{
+  Timer* timer = default_timer(1);
+  timer->interval_ms = 10000;
+  timer->repeat_for = 1000;
+  EXPECT_CALL(*_callback, perform(_)).Times(0);
+  EXPECT_CALL(*_store, fetch(1, _)).WillOnce(Return())
+                                      .WillOnce(SetArgPointee<1>(timer));
+  EXPECT_CALL(*_store, insert(timer)).Times(2);
+  EXPECT_CALL(*_replicator, replicate(timer));
+  EXPECT_CALL(*_mock_increment_table, decrement(1));
+  EXPECT_CALL(*_mock_tag_table, decrement("TAG1", 1));
+  EXPECT_CALL(*_mock_scalar_table, decrement("TAG1", 1));
+  _th->pop(timer);
+  EXPECT_TRUE(timer->is_tombstone());
+  delete timer;
+}
+
+TEST_F(TestTimerHandlerAddAndReturn, SkipExpiredReplicatedSequenceWithoutOverflow)
+{
+  Timer* timer = default_timer(1);
+  timer->interval_ms = 2000000000;
+  timer->repeat_for = 2000000000;
+  timer->sequence_number = 2;
+  EXPECT_CALL(*_callback, perform(_)).Times(0);
+  EXPECT_CALL(*_store, fetch(1, _)).WillOnce(Return())
+                                      .WillOnce(SetArgPointee<1>(timer));
+  EXPECT_CALL(*_store, insert(timer)).Times(2);
+  EXPECT_CALL(*_replicator, replicate(timer));
+  EXPECT_CALL(*_mock_increment_table, decrement(1));
+  EXPECT_CALL(*_mock_tag_table, decrement("TAG1", 1));
+  EXPECT_CALL(*_mock_scalar_table, decrement("TAG1", 1));
+  _th->pop(timer);
+  EXPECT_TRUE(timer->is_tombstone());
+  delete timer;
+}
+
 // Tests adding a single timer
 TEST_F(TestTimerHandlerAddAndReturn, AddTimer)
 {
