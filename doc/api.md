@@ -58,6 +58,11 @@ If no `"repeat-for"` attribute is specified, the timer only fires once, after `"
 
 _Note that, if `"repeat-for"` is strictly lower than the interval, the timer will never fire.  This use case is indicative of a logical error on the part of the client._
 
+`interval` and `repeat-for` must be non-negative integers no greater than
+2,147,483 seconds. The maximum also reserves the configured replica/site
+failover delay. Active timers outside this range are rejected with HTTP 400.
+Internal tombstones may extend `repeat-for` by one interval after the final pop.
+
 ##### Callback
 
 When the timer pops, the client will be notified though the callback mechanism specified here.  Currently only `"http"` is supported as a callback mechanism and specifying any other callback mechanism will result in your request being rejected.

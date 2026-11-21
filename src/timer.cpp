@@ -26,6 +26,7 @@
 #include <map>
 #include <atomic>
 #include <time.h>
+#include <limits>
 
 uint32_t DELAY_BETWEEN_CHRONOS_INSTANCES_MS = 2000;
 
@@ -677,7 +678,20 @@ Timer* Timer::from_json_obj(TimerID id,
       return NULL;
     }
 
-    timer = new Timer(id, (interval_s.GetInt() * 1000), (repeat_for_int * 1000));
+    // Modular timestamp comparisons require durations below half the uint32_t
+    // range. Validate seconds before converting to avoid signed overflow.
+    const int max_duration_s = std::numeric_limits<int32_t>::max() / 1000;
+    if ((interval_s.GetInt() < 0) || (repeat_for_int < 0) ||
+        (interval_s.GetInt() > max_duration_s) ||
+        (static_cast<uint64_t>(repeat_for_int) >
+         std::numeric_limits<uint32_t>::max() / 1000u))
+    {
+      error = "Timer durations must be between 0 and " +
+              std::to_string(max_duration_s) + " seconds";
+      return NULL;
+    }
+
+    timer = new Timer(id, interval_s.GetInt() * 1000u, repeat_for_int * 1000u);
 
     if (timing.HasMember("start-time-delta"))
     {
@@ -828,6 +842,21 @@ Timer* Timer::from_json_obj(TimerID id,
     else
     {
       gr_replicated = true;
+    }
+
+    // Reserve the maximum failover delay so even the last replica/site stays
+    // inside the half-range used by modular timestamp comparisons. Tombstones
+    // can legitimately extend repeat-for by one interval after the final pop.
+    uint64_t failover_delay =
+      (static_cast<uint64_t>(timer->sites.size() - 1) * timer->_replication_factor +
+       timer->replicas.size() - 1) * DELAY_BETWEEN_CHRONOS_INSTANCES_MS;
+    if (!timer->is_tombstone() &&
+        (std::max(timer->interval_ms, timer->repeat_for) + failover_delay >
+         static_cast<uint64_t>(std::numeric_limits<int32_t>::max())))
+    {
+      error = "Timer duration plus failover delay exceeds the supported range";
+      delete timer;
+      return NULL;
     }
 
     if ((doc.HasMember("statistics")) &&
