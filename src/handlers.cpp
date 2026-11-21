@@ -69,6 +69,13 @@ void ControllerTask::add_or_update_timer(TimerID timer_id,
                                          uint32_t replication_factor,
                                          uint64_t replica_hash)
 {
+  // Zero is only a sentinel for a new POST whose factor comes from the body.
+  if ((_req.method() != htp_method_POST) && (replication_factor == 0))
+  {
+    send_http_reply(HTTP_BAD_REQUEST);
+    return;
+  }
+
   Timer* timer = NULL;
   bool replicated_timer = false;
   bool gr_replicated_timer = false;

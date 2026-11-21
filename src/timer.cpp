@@ -756,9 +756,17 @@ Timer* Timer::from_json_obj(TimerID id,
       {
         if (reliability.HasMember("replication-factor"))
         {
+          int requested_factor;
           JSON_GET_INT_MEMBER(reliability,
                               "replication-factor",
-                              timer->_replication_factor);
+                              requested_factor);
+          if (requested_factor <= 0)
+          {
+            error = "Replication factor must be positive";
+            delete timer;
+            return NULL;
+          }
+          timer->_replication_factor = requested_factor;
 
           // If the URL contained a replication factor then this replication
           // factor must match the replication factor in the JSON body.
