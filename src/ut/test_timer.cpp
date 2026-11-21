@@ -47,6 +47,18 @@ protected:
 /* Class functions                                                           */
 /*****************************************************************************/
 
+TEST_F(TestTimerIDFormats, RejectNonObjectJSONRoots)
+{
+  for (const std::string json : {"[]", "null", "42", "true", "\"timer\""})
+  {
+    std::string error;
+    bool replicated = false;
+    bool gr_replicated = false;
+    EXPECT_EQ(nullptr, Timer::from_json(1, 0, 0, json, error, replicated, gr_replicated));
+    EXPECT_FALSE(error.empty());
+  }
+}
+
 TEST_F(TestTimerIDFormats, FromJSONTests)
 {
   // The following tests depend on the current time, so install the shim

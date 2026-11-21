@@ -645,6 +645,7 @@ Timer* Timer::from_json_obj(TimerID id,
 
   try
   {
+    JSON_ASSERT_OBJECT(doc);
     JSON_ASSERT_CONTAINS(doc, "timing");
     JSON_ASSERT_CONTAINS(doc, "callback");
 
