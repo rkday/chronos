@@ -335,7 +335,7 @@ static void calculate_rendezvous_hash(std::vector<std::string> cluster,
                                       std::vector<std::string>& replicas,
                                       Hasher* hasher)
 {
-  if (replication_factor == 0u)
+  if ((replication_factor == 0u) || cluster.empty())
   {
     return;
   }
