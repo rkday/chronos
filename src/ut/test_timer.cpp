@@ -487,6 +487,54 @@ TEST_F(TestTimer, ToJSON)
   cwtest_reset_time();
 }
 
+TEST_F(TestTimerIDFormats, ReserveFailoverDelayAndAcceptExtendedTombstones)
+{
+  std::string error;
+  bool replicated = false, gr_replicated = false;
+  std::string json = "{\"timing\":{\"interval\":2147483},"
+    "\"callback\":{\"http\":{\"uri\":\"http://localhost/cb\",\"opaque\":\"x\"}}}";
+  EXPECT_EQ(nullptr, Timer::from_json(1, 0, 0, json, error, replicated, gr_replicated));
+
+  // A long one-shot timer's final tombstone extends repeat-for to two intervals.
+  json = "{\"timing\":{\"interval\":2000000,\"repeat-for\":4000000,"
+    "\"sequence-number\":1,\"start-time-delta\":-2000000000},"
+    "\"callback\":{\"http\":{\"uri\":\"\",\"opaque\":\"\"}}}";
+  Timer* timer = Timer::from_json(1, 0, 0, json, error, replicated, gr_replicated);
+  ASSERT_NE(nullptr, timer);
+  EXPECT_TRUE(timer->is_tombstone());
+  EXPECT_EQ(4000000000u, timer->repeat_for);
+  delete timer;
+}
+
+TEST_F(TestTimerIDFormats, ValidateDurationBoundsBeforeConvertingToMilliseconds)
+{
+  for (const std::string timing : {
+         "\"interval\":-1", "\"interval\":1,\"repeat-for\":-1",
+         "\"interval\":2147484", "\"interval\":4294968",
+         "\"interval\":1,\"repeat-for\":2147484",
+         "\"interval\":2147483647"})
+  {
+    std::string error;
+    bool replicated = false, gr_replicated = false;
+    std::string json = "{\"timing\":{" + timing +
+      "},\"callback\":{\"http\":{\"uri\":\"http://localhost/cb\",\"opaque\":\"x\"}}}";
+    EXPECT_EQ(nullptr, Timer::from_json(1, 0, 0, json, error, replicated, gr_replicated));
+    EXPECT_FALSE(error.empty());
+  }
+  for (int interval : {0, 2147483})
+  {
+    std::string error;
+    bool replicated = false, gr_replicated = false;
+    std::string json = "{\"timing\":{\"interval\":" + std::to_string(interval) +
+      "},\"callback\":{\"http\":{\"uri\":\"http://localhost/cb\",\"opaque\":\"x\"}},"
+      "\"reliability\":{\"replication-factor\":1,\"sites\":[\"local_site_name\"]}}";
+    Timer* timer = Timer::from_json(1, 0, 0, json, error, replicated, gr_replicated);
+    ASSERT_NE(nullptr, timer);
+    EXPECT_EQ(interval * 1000u, timer->interval_ms);
+    delete timer;
+  }
+}
+
 TEST_F(TestTimer, IsLocal)
 {
   EXPECT_TRUE(t1->is_local("10.0.0.1:9999"));
