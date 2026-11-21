@@ -73,11 +73,15 @@ TimerHandler::~TimerHandler()
     pthread_mutex_unlock(&_mutex);
     pthread_join(_handler_thread, NULL);
   }
+  // Callback destruction stops and joins its workers. They may still return
+  // timers or report completion, so keep the store lock alive until then.
+  delete _callback;
+  _callback = NULL;
+
   delete _cond;
   _cond = NULL;
 
   pthread_mutex_destroy(&_mutex);
-  delete _callback;
 }
 
 void TimerHandler::add_timer(Timer* timer, bool update_stats)

@@ -78,6 +78,41 @@ protected:
   TimerHandler* _th;
 };
 
+class ReturningCallbackOnShutdown : public Callback
+{
+public:
+  explicit ReturningCallbackOnShutdown(TimerHandler** handler) : _handler(handler) {}
+  std::string protocol() { return "http"; }
+  void perform(Timer*) {}
+  ~ReturningCallbackOnShutdown()
+  {
+    // Simulate an in-flight worker returning its timer while stop joins it.
+    EXPECT_NE(nullptr, (*_handler)->_cond);
+    int rc = pthread_mutex_lock(&(*_handler)->_mutex);
+    EXPECT_EQ(0, rc);
+    if (rc == 0)
+    {
+      pthread_mutex_unlock(&(*_handler)->_mutex);
+      (*_handler)->return_timer(default_timer(99));
+    }
+  }
+private:
+  TimerHandler** _handler;
+};
+
+TEST_F(TestTimerHandlerFetchAndPop, CallbackCanReturnTimerDuringShutdown)
+{
+  delete _callback;
+  _callback = NULL;
+  EXPECT_CALL(*_store, fetch_next_timers(_)).Times(2);
+  EXPECT_CALL(*_store, fetch(99, _));
+  EXPECT_CALL(*_store, insert(_)).WillOnce(DeleteArg<0>());
+  _th = new TimerHandler(_store, new ReturningCallbackOnShutdown(&_th),
+                         _replicator, NULL, NULL, NULL, NULL);
+  _cond()->block_till_waiting();
+  // Fixture teardown destroys the handler and runs the callback destructor.
+}
+
 TEST_F(TestTimerHandlerFetchAndPop, StartUpAndShutDown)
 {
   EXPECT_CALL(*_store, fetch_next_timers(_)).
