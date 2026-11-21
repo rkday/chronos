@@ -494,6 +494,25 @@ TEST_F(TestTimer, IsLocal)
   EXPECT_FALSE(t1->is_local("20.0.0.1:9999"));
 }
 
+TEST_F(TestTimerIDFormats, SelectReplicasWithEmptyOldOrNewCluster)
+{
+  Hasher hasher;
+  std::vector<std::string> replicas;
+  std::vector<std::string> extra_replicas;
+  Timer::calculate_replicas(1, {"joining"}, {1}, {}, {}, 2,
+                           replicas, extra_replicas, &hasher);
+  ASSERT_EQ(1u, replicas.size());
+  EXPECT_EQ("joining", replicas.front());
+  EXPECT_TRUE(extra_replicas.empty());
+
+  replicas.clear();
+  Timer::calculate_replicas(1, {}, {}, {"leaving"}, {1}, 2,
+                           replicas, extra_replicas, &hasher);
+  EXPECT_TRUE(replicas.empty());
+  ASSERT_EQ(1u, extra_replicas.size());
+  EXPECT_EQ("leaving", extra_replicas.front());
+}
+
 TEST_F(TestTimer, IsTombstone)
 {
   Timer* t2 = Timer::create_tombstone(100, 0, 2);
