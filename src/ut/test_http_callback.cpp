@@ -85,7 +85,7 @@ TEST_F(TestHTTPCallback, Failure)
   fakecurl_responses["http://10.42.42.42:80/callback1"] = CURLE_REMOTE_FILE_NOT_FOUND;
   Timer* timer1 = default_timer(1);
   EXPECT_CALL(*_th, return_timer(timer1));
-  EXPECT_CALL(*_th, handle_failed_callback(1));
+  EXPECT_CALL(*_th, handle_failed_callback(1, timer1->start_time_mono_ms, timer1->sequence_number));
   _callback->perform(timer1);
 
   // The timer's been sent when fakecurl records the request. Sleep until then.

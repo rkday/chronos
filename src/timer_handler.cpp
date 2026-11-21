@@ -275,12 +275,23 @@ void TimerHandler::handle_successful_callback(TimerID timer_id)
   pthread_mutex_unlock(&_mutex);
 }
 
-void TimerHandler::handle_failed_callback(TimerID timer_id)
+void TimerHandler::handle_failed_callback(TimerID timer_id,
+                                           uint32_t start_time_mono_ms,
+                                           uint32_t sequence_number)
 {
   // Fetch the timer from the store and delete it.
   pthread_mutex_lock(&_mutex);
   Timer* timer = NULL;
   _store->fetch(timer_id, &timer);
+  if ((timer != NULL) &&
+      ((timer->start_time_mono_ms != start_time_mono_ms) ||
+       (timer->sequence_number != sequence_number)))
+  {
+    // A refresh or a later pop has superseded the failed callback. Restore
+    // that timer under the same lock without changing its statistics.
+    _store->insert(timer);
+    timer = NULL;
+  }
   pthread_mutex_unlock(&_mutex);
 
   if (timer)
