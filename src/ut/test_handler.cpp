@@ -134,6 +134,24 @@ TYPED_TEST(TestHandler, ValidJSONDeleteTimerWithoutReplicas)
 // /timers/<timer_id>-<replication_factor><random> are accepted. This tests that
 // the URL parsing is flexible, so the URL can be extended in the future if
 // necessary. Currently this random content is ignored.
+TYPED_TEST(TestHandler, RejectOutOfRangeReplicationFactor)
+{
+  TestFixture::controller_request("/timers/1234123412341234-999999999999999999999999999999999999", htp_method_DELETE, "", "");
+  EXPECT_CALL(*TestFixture::_replicator, replicate(_)).Times(0);
+  EXPECT_CALL(*TestFixture::_th, add_timer(_, _)).Times(0);
+  EXPECT_CALL(*TestFixture::_httpstack, send_reply(_, 400, _));
+  TestFixture::_task->run();
+}
+
+TYPED_TEST(TestHandler, RejectTruncatedReplicationFactor)
+{
+  TestFixture::controller_request("/timers/1234123412341234-4294967296", htp_method_DELETE, "", "");
+  EXPECT_CALL(*TestFixture::_replicator, replicate(_)).Times(0);
+  EXPECT_CALL(*TestFixture::_th, add_timer(_, _)).Times(0);
+  EXPECT_CALL(*TestFixture::_httpstack, send_reply(_, 400, _));
+  TestFixture::_task->run();
+}
+
 TYPED_TEST(TestHandler, ValidJSONDeleteTimerWithExtendedTimerID)
 {
   Timer* added_timer;

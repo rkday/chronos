@@ -13,6 +13,8 @@
 #include <boost/regex.hpp>
 #include "json_parse_utils.h"
 #include "constants.h"
+#include <limits>
+#include <stdexcept>
 
 void ControllerTask::run()
 {
@@ -52,8 +54,26 @@ void ControllerTask::run()
     else
     {
       TimerID timer_id = std::stoull(matches[1].str(), NULL, 16);
-      uint32_t replication_factor = std::stoull(matches[2].str(), NULL);
-      add_or_update_timer(timer_id, replication_factor, 0);
+      uint64_t replication_factor;
+      try
+      {
+        replication_factor = std::stoull(matches[2].str(), NULL);
+      }
+      catch (const std::out_of_range&)
+      {
+        send_http_reply(HTTP_BAD_REQUEST);
+        delete this;
+        return;
+      }
+
+      if (replication_factor > std::numeric_limits<uint32_t>::max())
+      {
+        send_http_reply(HTTP_BAD_REQUEST);
+      }
+      else
+      {
+        add_or_update_timer(timer_id, replication_factor, 0);
+      }
     }
   }
   else
