@@ -13,6 +13,8 @@
 #include <boost/regex.hpp>
 #include "json_parse_utils.h"
 #include "constants.h"
+#include <limits>
+#include <stdexcept>
 
 void ControllerTask::run()
 {
@@ -187,8 +189,31 @@ void ControllerTask::handle_get()
   std::string time_from_str = _req.param(PARAM_TIME_FROM);
   uint32_t time_from = Utils::get_time();
 
-  if (time_from_str != "")
+  std::string absolute_time_from = _req.param(PARAM_TIME_FROM_ABSOLUTE);
+  if (!absolute_time_from.empty())
   {
+    try
+    {
+      size_t end = 0;
+      uint64_t cursor = std::stoull(absolute_time_from, &end);
+      if ((absolute_time_from.find_first_not_of("0123456789") != std::string::npos) ||
+          (end != absolute_time_from.size()) ||
+          (cursor > std::numeric_limits<uint32_t>::max()))
+      {
+        send_http_reply(HTTP_BAD_REQUEST);
+        return;
+      }
+      time_from = cursor;
+    }
+    catch (const std::exception&)
+    {
+      send_http_reply(HTTP_BAD_REQUEST);
+      return;
+    }
+  }
+  else if (time_from_str != "")
+  {
+    // Retain the relative-time API for older peers.
     time_from += atoi(time_from_str.c_str());
   }
 

@@ -532,3 +532,53 @@ TEST_F(ChronosInternalConnectionTest, SendTriggerInvalidResultInvalidTimers)
   HTTPCode status = _chronos->resynchronise_with_single_node("10.0.0.1:9999", _cluster_addresses, _local_ip);
   EXPECT_EQ(400, status);
 }
+
+TEST_F(ChronosInternalConnectionTest, EchoSourceCursorDespiteReplicaDelayAndLatency)
+{
+  HttpResponse resp_partial(HTTP_PARTIAL_CONTENT,
+                            "{\"NextTimeFrom\":12345,\"Timers\":[{\"TimerID\":4, "
+                                          "\"OldReplicas\":[\"10.0.0.2:9999\"], "
+                                          "\"Timer\": {\"timing\": { \"start-time-delta\": -235, \"interval\": 100, \"repeat-for\": 200 }, "
+                                                      "\"callback\": { \"http\": { \"uri\": \"localhost\", \"opaque\": \"stuff\" }}, "
+                                                      "\"reliability\": { \"replicas\": [ \"10.0.0.2\", \"10.0.0.1:9999\" ] }}}]}",
+                            {});
+  HttpResponse resp_ok(HTTP_OK, "{\"Timers\":[]}", {});
+
+  // Expect that we'll build and send the first resync request with time-from
+  // set to 0.
+  // Respond with a single timer that has a delta of -235ms, and an interval of
+  // 100ms. Set the response code to 206 so that we'll make another request
+  EXPECT_CALL(*_client, send_request(AllOf(IsGet(),
+                                           HasServer("10.0.0.1:9999"),
+                                           HasPath("/timers?node-for-replicas=10.0.0.1:9999;cluster-view-id=cluster-view-id"))))
+    .WillOnce(::testing::Invoke([resp_partial](const HttpRequest&) {
+      cwtest_advance_time_ms(500);
+      return resp_partial;
+    }));
+
+  // Expect that we'll build and send the second request with time-from based on
+  // the time of the timer we received before.
+  // Respond with an empty body as we don't care about any other timers in this
+  // test
+  EXPECT_CALL(*_client, send_request(AllOf(IsGet(),
+                                           HasServer("10.0.0.1:9999"),
+                                           HasPath("/timers?node-for-replicas=10.0.0.1:9999;cluster-view-id=cluster-view-id;time-from-absolute=12345"))))
+    .WillOnce(Return(resp_ok));
+
+  // Expect that we'll send deletes to all cluster nodes
+  expect_delete("10.0.0.1:9999", "{\"IDs\":[{\"ID\":4,\"ReplicaIndex\":1}]}");
+  expect_delete("10.0.0.2:9999", "{\"IDs\":[{\"ID\":4,\"ReplicaIndex\":1}]}");
+  expect_delete("10.0.0.3:9999", "{\"IDs\":[{\"ID\":4,\"ReplicaIndex\":1}]}");
+
+  // Save off the added timer so we can delete it (the add_timer call normally
+  // deletes the timer but it's mocked out)
+  Timer* added_timer;
+  EXPECT_CALL(*_th, add_timer(_,_)).WillOnce(SaveArg<0>(&added_timer));
+
+  EXPECT_CALL(*_replicator, replicate_timer_to_node(_, _)).Times(0);
+
+  HTTPCode status = _chronos->resynchronise_with_single_node("10.0.0.1:9999", _cluster_addresses, _local_ip);
+  EXPECT_EQ(200, status);
+
+  delete added_timer; added_timer = NULL;
+}

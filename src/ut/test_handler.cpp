@@ -548,3 +548,13 @@ TYPED_TEST(TestHandler, ReplicationFactorGreaterThanReplicasReplicated)
   EXPECT_EQ(added_timer->replicas.size(), 1);
   delete added_timer; added_timer = NULL;
 }
+
+TYPED_TEST(TestHandler, AbsoluteResyncCursorIsNotRelativeToCurrentTime)
+{
+  TestFixture::controller_request("/timers", htp_method_GET, "",
+      "node-for-replicas=10.0.0.1:9999;cluster-view-id=cluster-view-id;time-from-absolute=12345");
+  EXPECT_CALL(*TestFixture::_th, get_timers_for_node("10.0.0.1:9999", _,
+      "cluster-view-id", 12345, _)).WillOnce(Return(200));
+  EXPECT_CALL(*TestFixture::_httpstack, send_reply(_, 200, _));
+  TestFixture::_task->run();
+}

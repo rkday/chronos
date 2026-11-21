@@ -250,3 +250,13 @@ The `ReplicaIndex` is the index of the timer in the replica list (where 0 repres
 #### Response (DELETE)
 
 The response is a `202 Accepted` if the JSON body is valid, and a `400 Bad Request` otherwise.
+
+### Resynchronization continuation cursor
+
+Partial timer responses include `NextTimeFrom`, an unsigned 32-bit timestamp in
+the responding node's monotonic clock. Updated peers echo it unchanged as the
+`time-from-absolute` query parameter. It identifies the first source pop time
+following the returned page, independent of the requester's replica position
+or elapsed time between requests. Timers exactly at the cursor are included.
+The legacy relative `time-from` parameter remains supported for older peers;
+updated clients fall back to it when a response has no `NextTimeFrom` field.

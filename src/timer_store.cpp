@@ -605,7 +605,7 @@ TimerStore::TSHeapIterator::TSHeapIterator(TimerStore* ts,
 {
   while (!this->end())
   {
-    if (Utils::overflow_less_than(time_from, static_cast<Timer*>(*_iterator)->next_pop_time()))
+    if (!Utils::overflow_less_than(static_cast<Timer*>(*_iterator)->next_pop_time(), time_from))
     {
       break;
     }

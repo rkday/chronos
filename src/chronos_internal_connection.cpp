@@ -158,6 +158,7 @@ HTTPCode ChronosInternalConnection::resynchronise_with_single_node(
   uint32_t current_time = Utils::get_time();
   uint32_t time_from = 0;
   bool use_time_from_param = false;
+  bool absolute_time_from = false;
   std::string response;
   HTTPCode rc;
 
@@ -168,7 +169,8 @@ HTTPCode ChronosInternalConnection::resynchronise_with_single_node(
     std::string path = create_path(localhost,
                                    cluster_view_id,
                                    time_from,
-                                   use_time_from_param);
+                                   use_time_from_param,
+                                   absolute_time_from);
     rc = send_get(server_to_sync,
                   path,
                   MAX_TIMERS_IN_RESPONSE,
@@ -384,6 +386,17 @@ HTTPCode ChronosInternalConnection::resynchronise_with_single_node(
           }
         }
 
+        if (doc.HasMember(JSON_NEXT_TIME_FROM))
+        {
+          JSON_GET_UINT_MEMBER(doc, JSON_NEXT_TIME_FROM, time_from);
+          absolute_time_from = true;
+        }
+        else
+        {
+          // Older peers only support the legacy relative-time cursor.
+          absolute_time_from = false;
+        }
+
         // Check if we were able to successfully process any timers - if not
         // then bail out as there's something wrong with the node we're
         // querying
@@ -461,7 +474,8 @@ std::string ChronosInternalConnection::create_path(
                                      const std::string& node_for_replicas_param,
                                      std::string cluster_view_id_param,
                                      uint32_t time_from_param,
-                                     bool use_time_from_param)
+                                     bool use_time_from_param,
+                                     bool absolute_time_from)
 {
   std::string path = std::string("/timers?") +
                      PARAM_NODE_FOR_REPLICAS + "="  + node_for_replicas_param + ";" +
@@ -470,7 +484,8 @@ std::string ChronosInternalConnection::create_path(
   if (use_time_from_param)
   {
     path += std::string(";") +
-            PARAM_TIME_FROM + "=" + std::to_string(time_from_param);
+            (absolute_time_from ? PARAM_TIME_FROM_ABSOLUTE : PARAM_TIME_FROM) +
+            "=" + std::to_string(time_from_param);
   }
 
   return path;

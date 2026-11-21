@@ -1159,6 +1159,7 @@ TEST_F(TestTimerHandlerRealStore, GetTimersForNodeHitMaxResponses)
   std::string get_response;
   int rc = _th->get_timers_for_node("10.0.0.1:9999", 1, updated_cluster_view_id, current_time, get_response);
   std::string exp_rsp = "\\\{\"Timers\":\\\[\\\{\"TimerID\":2,\"OldReplicas\":\\\[\"10.0.0.1:9999\"],\"Timer\":\\\{\"timing\":\\\{\"start-time\".*,\"start-time-delta\".*,\"sequence-number\":0,\"interval\":100,\"repeat-for\":100},\"callback\":\\\{\"http\":\\\{\"uri\":\"http://localhost:80/callback2\",\"opaque\":\"stuff stuff stuff\"}},\"reliability\":\\\{\"cluster-view-id\":\"updated-cluster-view-id\",\"replicas\":\\\[\"10.0.0.1:9999\"],\"sites\":\\\[\"local_site_name\",\"remote_site_1_name\"]},\"statistics\":\\\{\"tag-info\":\\\[\\\{\"type\":\"TAG2\",\"count\":1}]}}}]}";
+  exp_rsp.insert(exp_rsp.size() - 1, ",\"NextTimeFrom\":[0-9]+");
   EXPECT_THAT(get_response, MatchesRegex(exp_rsp));
   EXPECT_EQ(rc, 206);
 }
@@ -1560,4 +1561,47 @@ TEST_F(TestTimerHandlerWithGREnabled, ReplicateCallbackSuccess)
   _th->handle_successful_callback(id);
 
   delete timer;
+}
+
+
+TEST_F(TestTimerHandlerRealStore, SourceCursorIncludesAdjacentHeapTimer)
+{
+  const std::string local = "10.0.0.1:9999";
+  const std::string peer = "10.0.0.2";
+  __globals->set_cluster_staying_addresses({local, peer});
+  __globals->set_new_cluster_hashes({1, 2});
+  __globals->set_old_cluster_hashes({1, 2});
+  Timer* first = default_timer(1);
+  Timer* second = default_timer(2);
+  for (Timer* timer : {first, second})
+  {
+    timer->interval_ms = 6000000;
+    timer->repeat_for = 6000000;
+    timer->_replication_factor = 2;
+    timer->replicas = {peer, local};
+    timer->tags.clear();
+  }
+  second->start_time_mono_ms++;
+  uint32_t expected_cursor = first->next_pop_time() + 1;
+  EXPECT_CALL(*_mock_increment_table, increment(1)).Times(2);
+  _th->add_timer(first);
+  _th->add_timer(second);
+
+  std::string response;
+  EXPECT_EQ(HTTP_PARTIAL_CONTENT, _th->get_timers_for_node(peer, 1,
+      "cluster-view-id", Utils::get_time(), response));
+  rapidjson::Document page;
+  page.Parse<0>(response.c_str());
+  ASSERT_TRUE(page.HasMember("NextTimeFrom"));
+  EXPECT_EQ(expected_cursor, page["NextTimeFrom"].GetUint());
+  ASSERT_EQ(1u, page["Timers"].Size());
+  EXPECT_EQ(1, page["Timers"][0u]["TimerID"].GetInt());
+
+  // The next timer is exactly at the cursor and must not be skipped in the heap.
+  cwtest_advance_time_ms(500);
+  EXPECT_EQ(HTTP_OK, _th->get_timers_for_node(peer, 10,
+      "cluster-view-id", page["NextTimeFrom"].GetUint(), response));
+  page.Parse<0>(response.c_str());
+  ASSERT_EQ(1u, page["Timers"].Size());
+  EXPECT_EQ(2, page["Timers"][0u]["TimerID"].GetInt());
 }
