@@ -386,6 +386,13 @@ HTTPCode TimerHandler::get_timers_for_node(std::string request_node,
   }
 
   writer.EndArray();
+  if (retrieved_timers >= max_rsps_with_unique_pop_time)
+  {
+    // This cursor is in the source node's monotonic clock and replica order.
+    // Requesters echo it unchanged instead of deriving it from their timers.
+    writer.String(JSON_NEXT_TIME_FROM);
+    writer.Uint(last_time_from + 1);
+  }
   writer.EndObject();
   get_response = sb.GetString();
   pthread_mutex_unlock(&_mutex);
