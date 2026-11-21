@@ -981,8 +981,41 @@ TEST_F(TestTimerHandlerAddAndReturn, HandleCallbackFailure)
   EXPECT_CALL(*_mock_scalar_table, decrement("TAG1", 1)).Times(1);
   EXPECT_CALL(*_store, insert(_)).Times(0);
 
-  _th->handle_failed_callback(id);
+  _th->handle_failed_callback(id, insert_timer->start_time_mono_ms, insert_timer->sequence_number);
   // Do not delete timer as this is already done in the function
+}
+
+TEST_F(TestTimerHandlerAddAndReturn, FailedCallbackPreservesRefreshedTimer)
+{
+  Timer* timer = default_timer(1);
+  uint32_t old_start = timer->start_time_mono_ms;
+  timer->start_time_mono_ms += 100;
+  EXPECT_CALL(*_store, fetch(1, _)).WillOnce(SetArgPointee<1>(timer));
+  EXPECT_CALL(*_store, insert(timer));
+  EXPECT_CALL(*_mock_increment_table, decrement(_)).Times(0);
+  EXPECT_CALL(*_mock_tag_table, decrement(_, _)).Times(0);
+  EXPECT_CALL(*_mock_scalar_table, decrement(_, _)).Times(0);
+  _th->handle_failed_callback(1, old_start, 0);
+  delete timer;
+}
+
+TEST_F(TestTimerHandlerAddAndReturn, FailedCallbackPreservesLaterPop)
+{
+  Timer* timer = default_timer(1);
+  timer->sequence_number = 2;
+  EXPECT_CALL(*_store, fetch(1, _)).WillOnce(SetArgPointee<1>(timer));
+  EXPECT_CALL(*_store, insert(timer));
+  EXPECT_CALL(*_mock_increment_table, decrement(_)).Times(0);
+  _th->handle_failed_callback(1, timer->start_time_mono_ms, 1);
+  delete timer;
+}
+
+TEST_F(TestTimerHandlerAddAndReturn, FailedCallbackForMissingTimer)
+{
+  EXPECT_CALL(*_store, fetch(1, _));
+  EXPECT_CALL(*_store, insert(_)).Times(0);
+  EXPECT_CALL(*_mock_increment_table, decrement(_)).Times(0);
+  _th->handle_failed_callback(1, 0, 1);
 }
 
 // Timer handler tests with a real timer store. This allows better tests of resync

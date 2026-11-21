@@ -105,6 +105,8 @@ void HTTPCallback::worker_thread_entry_point()
     {
       // Pull out the timer details for use in the CURL request.
       TimerID timer_id = timer->id;
+      uint32_t start_time_mono_ms = timer->start_time_mono_ms;
+      uint32_t sequence_number = timer->sequence_number;
       std::string callback_url = timer->callback_url;
       std::string callback_body = timer->callback_body;
 
@@ -150,14 +152,14 @@ void HTTPCallback::worker_thread_entry_point()
                     callback_url.c_str(), http_rc);
 
           // The callback failed, and so we need to remove the timer from the store.
-          _handler->handle_failed_callback(timer_id);
+          _handler->handle_failed_callback(timer_id, start_time_mono_ms, sequence_number);
         }
       }
       //LCOV_EXCL_START
       else
       {
         TRC_ERROR("Invalid callback url: %s", callback_url.c_str());
-        _handler->handle_failed_callback(timer_id);
+        _handler->handle_failed_callback(timer_id, start_time_mono_ms, sequence_number);
       }
       // LCOV_EXCL_STOP
     }

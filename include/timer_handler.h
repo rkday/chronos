@@ -45,7 +45,9 @@ public:
   virtual void add_timer(Timer*, bool=true);
   virtual void return_timer(Timer*);
   virtual void handle_successful_callback(TimerID id);
-  virtual void handle_failed_callback(TimerID id);
+  virtual void handle_failed_callback(TimerID id,
+                                      uint32_t start_time_mono_ms,
+                                      uint32_t sequence_number);
   virtual HTTPCode get_timers_for_node(std::string node,
                                        int max_rsps_with_unique_pop_time,
                                        std::string cluster_view_id,
